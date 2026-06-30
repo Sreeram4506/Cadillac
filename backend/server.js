@@ -7,7 +7,7 @@ require('dotenv').config();
 const { MongoClient } = require('mongodb');
 
 const app = express();
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
 const DATA_FILE = path.join(__dirname, 'data.json');
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const MONGODB_DB_NAME = process.env.MONGODB_DB || 'dealership_ai';
