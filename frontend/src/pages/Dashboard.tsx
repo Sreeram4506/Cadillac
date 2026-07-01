@@ -4,24 +4,39 @@ import { KpiCard } from "@/components/cards/KpiCard";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  ResponsiveContainer, XAxis, YAxis, Tooltip, Legend 
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
 } from "recharts";
 import { TrendingUp, Users, Car, AlertCircle, Clock, Star, Activity } from "lucide-react";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { DashboardData } from "@/types";
-import { apiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 const COLORS = ["hsl(var(--primary))", "hsl(var(--secondary))", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 export default function Dashboard() {
-  const { data: dashboard, isLoading } = useQuery<DashboardData>({
+  const {
+    data: dashboard,
+    isLoading,
+    isError,
+    error,
+  } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
-    queryFn: async () => {
-      const response = await fetch(apiUrl("/api/dashboard"));
-      return response.json();
-    },
+    queryFn: async () => apiFetch<DashboardData>("/api/dashboard"),
+    retry: false,
   });
 
   if (isLoading) {
@@ -36,7 +51,27 @@ export default function Dashboard() {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="space-y-4 p-6">
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-primary" />
+          <div>
+            <h2 className="text-base font-semibold">Dashboard unavailable</h2>
+            <p className="text-sm text-muted-foreground">
+              {String((error as any)?.message || error || "Unknown error")}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Please sign in again if your session expired.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!dashboard) return null;
+  const data = dashboard;
 
   return (
     <motion.div
@@ -54,40 +89,40 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           title="Today's Visitors"
-          value={dashboard.kpis.todayVisitors.value}
-          delta={dashboard.kpis.todayVisitors.delta}
-          trend={dashboard.kpis.todayVisitors.trend}
+          value={data.kpis.todayVisitors.value}
+          delta={data.kpis.todayVisitors.delta}
+          trend={data.kpis.todayVisitors.trend}
         />
         <KpiCard
           title="Today's Sales"
-          value={dashboard.kpis.todaySales.value}
-          delta={dashboard.kpis.todaySales.delta}
-          trend={dashboard.kpis.todaySales.trend}
+          value={data.kpis.todaySales.value}
+          delta={data.kpis.todaySales.delta}
+          trend={data.kpis.todaySales.trend}
         />
         <KpiCard
           title="Conversion Rate"
-          value={dashboard.kpis.conversionRate.value}
-          delta={dashboard.kpis.conversionRate.delta}
-          trend={dashboard.kpis.conversionRate.trend}
+          value={data.kpis.conversionRate.value}
+          delta={data.kpis.conversionRate.delta}
+          trend={data.kpis.conversionRate.trend}
           format="percentage"
         />
         <KpiCard
           title="Lost Customers"
-          value={dashboard.kpis.lostCustomers.value}
-          delta={dashboard.kpis.lostCustomers.delta}
-          trend={dashboard.kpis.lostCustomers.trend}
+          value={data.kpis.lostCustomers.value}
+          delta={data.kpis.lostCustomers.delta}
+          trend={data.kpis.lostCustomers.trend}
         />
         <KpiCard
           title="Pending Follow-ups"
-          value={dashboard.kpis.pendingFollowups.value}
-          delta={dashboard.kpis.pendingFollowups.delta}
-          trend={dashboard.kpis.pendingFollowups.trend}
+          value={data.kpis.pendingFollowups.value}
+          delta={data.kpis.pendingFollowups.delta}
+          trend={data.kpis.pendingFollowups.trend}
         />
         <KpiCard
           title="Avg Customer Rating"
-          value={dashboard.kpis.avgRating.value}
-          delta={dashboard.kpis.avgRating.delta}
-          trend={dashboard.kpis.avgRating.trend}
+          value={data.kpis.avgRating.value}
+          delta={data.kpis.avgRating.delta}
+          trend={data.kpis.avgRating.trend}
           format="number"
         />
       </div>
@@ -96,16 +131,24 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ChartCard title="Conversion Trend">
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={dashboard.kpis.conversionRate.trend.map((val, i) => ({ day: `Day ${i + 1}`, rate: val }))}>
+            <LineChart
+              data={data.kpis.conversionRate.trend.map((val, i) => ({
+                day: `Day ${i + 1}`,
+                rate: val,
+              }))}
+            >
               <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
               <YAxis stroke="hsl(var(--muted-foreground))" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="rate" 
-                stroke="hsl(var(--primary))" 
+              <Line
+                type="monotone"
+                dataKey="rate"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 dot={{ fill: "hsl(var(--primary))" }}
               />
@@ -115,16 +158,24 @@ export default function Dashboard() {
 
         <ChartCard title="Customer Flow">
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={dashboard.kpis.todayVisitors.trend.map((val, i) => ({ day: `Day ${i + 1}`, visitors: val }))}>
+            <AreaChart
+              data={data.kpis.todayVisitors.trend.map((val, i) => ({
+                day: `Day ${i + 1}`,
+                visitors: val,
+              }))}
+            >
               <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
               <YAxis stroke="hsl(var(--muted-foreground))" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="visitors" 
-                stroke="hsl(var(--primary))" 
+              <Area
+                type="monotone"
+                dataKey="visitors"
+                stroke="hsl(var(--primary))"
                 fill="hsl(var(--primary))"
                 fillOpacity={0.3}
               />
@@ -137,11 +188,19 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <ChartCard title="Sales Funnel" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dashboard.salesFunnel} layout="vertical">
+            <BarChart data={data.salesFunnel} layout="vertical">
               <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-              <YAxis dataKey="stage" type="category" stroke="hsl(var(--muted-foreground))" width={100} />
-              <Tooltip 
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+              <YAxis
+                dataKey="stage"
+                type="category"
+                stroke="hsl(var(--muted-foreground))"
+                width={100}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                }}
               />
               <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 8, 8, 0]} />
             </BarChart>
@@ -158,12 +217,16 @@ export default function Dashboard() {
           <CardContent>
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
-                {dashboard.topSalesperson.avatar}
+                {data.topSalesperson.avatar}
               </div>
               <div>
-                <h3 className="font-semibold">{dashboard.topSalesperson.name}</h3>
-                <p className="text-sm text-muted-foreground">AI Score: {dashboard.topSalesperson.aiScore}</p>
-                <p className="text-sm text-muted-foreground">Rating: {dashboard.topSalesperson.rating} ⭐</p>
+                <h3 className="font-semibold">{data.topSalesperson.name}</h3>
+                <p className="text-sm text-muted-foreground">
+                  AI Score: {data.topSalesperson.aiScore}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Rating: {data.topSalesperson.rating} ⭐
+                </p>
               </div>
             </div>
           </CardContent>
@@ -174,7 +237,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ChartCard title="Vehicle Demand Ranking">
           <div className="space-y-3">
-            {dashboard.vehicleDemand.slice(0, 5).map((item, index) => (
+            {data.vehicleDemand.slice(0, 5).map((item, index) => (
               <div key={item.vehicle} className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                   {index + 1}
@@ -182,12 +245,14 @@ export default function Dashboard() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{item.vehicle}</span>
-                    <span className="text-sm text-muted-foreground">{item.count} interested</span>
+                    <span className="text-sm text-muted-foreground">
+                      {item.count} interested
+                    </span>
                   </div>
                   <div className="mt-1 h-2 w-full rounded-full bg-muted">
-                    <div 
-                      className="h-2 rounded-full bg-primary" 
-                      style={{ width: `${(item.count / dashboard.vehicleDemand[0].count) * 100}%` }}
+                    <div
+                      className="h-2 rounded-full bg-primary"
+                      style={{ width: `${(item.count / data.vehicleDemand[0].count) * 100}%` }}
                     />
                   </div>
                 </div>
@@ -205,13 +270,13 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4 max-h-[300px] overflow-y-auto">
-              {dashboard.activityFeed.slice(0, 8).map((activity) => (
+              {data.activityFeed.slice(0, 8).map((activity) => (
                 <div key={activity.id} className="flex gap-3 text-sm">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                    {activity.type === 'check-in' && <Users className="h-4 w-4" />}
-                    {activity.type === 'conversion' && <TrendingUp className="h-4 w-4" />}
-                    {activity.type === 'test-drive' && <Car className="h-4 w-4" />}
-                    {activity.type === 'follow-up' && <Clock className="h-4 w-4" />}
+                    {activity.type === "check-in" && <Users className="h-4 w-4" />}
+                    {activity.type === "conversion" && <TrendingUp className="h-4 w-4" />}
+                    {activity.type === "test-drive" && <Car className="h-4 w-4" />}
+                    {activity.type === "follow-up" && <Clock className="h-4 w-4" />}
                   </div>
                   <div className="flex-1">
                     <p className="font-medium">{activity.description}</p>
@@ -239,7 +304,7 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {dashboard.aiInsights.slice(0, 4).map((insight) => (
+            {data.aiInsights.slice(0, 4).map((insight) => (
               <motion.div
                 key={insight.id}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -247,12 +312,17 @@ export default function Dashboard() {
                 className="rounded-xl border border-border bg-card p-4 shadow-sm"
               >
                 <div className="flex items-start gap-2">
-                  <div className={`mt-0.5 h-2 w-2 rounded-full ${
-                    insight.type === 'opportunity' ? 'bg-green-500' :
-                    insight.type === 'risk' ? 'bg-red-500' :
-                    insight.type === 'trend' ? 'bg-blue-500' :
-                    'bg-primary'
-                  }`} />
+                  <div
+                    className={`mt-0.5 h-2 w-2 rounded-full ${
+                      insight.type === "opportunity"
+                        ? "bg-green-500"
+                        : insight.type === "risk"
+                          ? "bg-red-500"
+                          : insight.type === "trend"
+                            ? "bg-blue-500"
+                            : "bg-primary"
+                    }`}
+                  />
                   <p className="text-sm">{insight.text}</p>
                 </div>
               </motion.div>
