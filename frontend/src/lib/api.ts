@@ -7,15 +7,16 @@ const resolvedBaseUrl = (() => {
 
   if (envBase) return envBase;
 
-  // When running locally (vite dev / local preview), use the local backend.
-  const host =
-    typeof window !== "undefined" ? window.location.hostname : "";
+  // Keep localhost behavior for local development only.
+  const devFlag = Boolean(env.DEV);
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
   const isLocalHost =
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host.endsWith(".localhost");
+    host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
 
-  return isLocalHost ? "http://localhost:3001" : "https://cadillac.onrender.com";
+  if (devFlag || isLocalHost) return "http://localhost:3001";
+
+  // Default for deployments.
+  return "https://cadillac.onrender.com";
 })();
 
 export const API_BASE_URL = resolvedBaseUrl;
