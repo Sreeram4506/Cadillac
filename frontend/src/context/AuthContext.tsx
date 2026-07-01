@@ -95,14 +95,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (!response.ok) {
-          const localUser = getLocalUserFromToken(token);
-          if (localUser) {
-            const nextSession = { token, user: localUser };
-            setStoredSession(nextSession);
-            if (active) setSession(nextSession);
-            return;
-          }
-          throw new Error("Session expired");
+    const localUser = getLocalUserFromToken(token);
+    if (localUser) {
+      // Only accept local/demo tokens when running locally.
+      // In production we expect real backend-issued tokens.
+      const isLocalEnv =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+      if (!isLocalEnv) {
+        throw new Error("Session expired (local token not allowed in production).");
+      }
+
+      const nextSession = { token, user: localUser };
+      setStoredSession(nextSession);
+      if (active) setSession(nextSession);
+      return;
+    }
+    throw new Error("Session expired");
         }
 
         const data = await response.json();
@@ -132,6 +141,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    const isLocalEnv =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
     try {
       const response = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
@@ -140,7 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        throw new Error("Invalid credentials");
+        // In production, do not silently fallback to local tokens.
+        throw new Error(`Login failed with status ${response.status}`);
       }
 
       const data = await response.json();
@@ -149,6 +163,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       return nextSession.user;
     } catch (error) {
+      // Local fallback tokens ONLY in local/dev environments.
+      if (!isLocalEnv) {
+        throw error;
+      }
+
       const localUser = localDemoUsers.find(
         (user) => user.email.toLowerCase() === email.toLowerCase().trim() && user.password === password
       );
