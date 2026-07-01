@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Timeline } from "@/components/layout/Timeline";
 import { ArrowLeft, Search, User } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { Appointment, Customer, Salesperson } from "@/types";
 import { formatDateTime } from "@/lib/utils";
 import { apiUrl } from "@/lib/api";
@@ -21,11 +22,6 @@ interface EditFormState {
   buyingPurpose: string;
   colorPreference: string;
   featurePriorities: string;
-  vehicleReaction: string;
-  comfortReaction: string;
-  priceReaction: string;
-  followUpIntent: string;
-  salesReview: string;
   budget: string;
   financeRequired: boolean;
   tradeIn: boolean;
@@ -41,11 +37,6 @@ const defaultEditForm: EditFormState = {
   buyingPurpose: "",
   colorPreference: "",
   featurePriorities: "",
-  vehicleReaction: "",
-  comfortReaction: "",
-  priceReaction: "",
-  followUpIntent: "",
-  salesReview: "",
   budget: "",
   financeRequired: false,
   tradeIn: false,
@@ -63,8 +54,8 @@ export default function Journey() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [role, setRole] = useState<"salesperson" | "manager" | "owner">("salesperson");
   const [editForm, setEditForm] = useState<EditFormState>(defaultEditForm);
   const [appointmentDraft, setAppointmentDraft] = useState({
     title: "",
@@ -109,11 +100,6 @@ export default function Journey() {
       buyingPurpose: customer.buyingPurpose || "",
       colorPreference: customer.colorPreference || "",
       featurePriorities: customer.featurePriorities?.join(", ") || "",
-      vehicleReaction: customer.vehicleReaction || "",
-      comfortReaction: customer.comfortReaction || "",
-      priceReaction: customer.priceReaction || "",
-      followUpIntent: customer.followUpIntent || "",
-      salesReview: customer.salesReview || "",
       budget: customer.budget ? String(customer.budget) : "",
       financeRequired: Boolean(customer.financeRequired),
       tradeIn: Boolean(customer.tradeIn),
@@ -123,6 +109,7 @@ export default function Journey() {
     });
   }, [customer]);
 
+  const role = user?.role || "salesperson";
   const canEditAll = role === "manager" || role === "owner";
   const isSalesperson = role === "salesperson";
 
@@ -134,7 +121,7 @@ export default function Journey() {
       return;
     }
 
-    const payload: Record<string, unknown> = { role };
+    const payload: Record<string, unknown> = {};
 
     if (canEditAll) {
       payload.status = editForm.status;
@@ -146,11 +133,6 @@ export default function Journey() {
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
-      payload.vehicleReaction = editForm.vehicleReaction;
-      payload.comfortReaction = editForm.comfortReaction;
-      payload.priceReaction = editForm.priceReaction;
-      payload.followUpIntent = editForm.followUpIntent;
-      payload.salesReview = editForm.salesReview;
       payload.budget = Number(editForm.budget);
       payload.financeRequired = editForm.financeRequired;
       payload.tradeIn = editForm.tradeIn;
@@ -195,7 +177,6 @@ export default function Journey() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          role,
           ...appointmentDraft,
         }),
       });
@@ -214,7 +195,6 @@ export default function Journey() {
 
   if (id && customer) {
     const appointments = (customer.appointments || []) as Appointment[];
-    const inventoryPush = customer.inventoryPush || [];
 
     return (
       <motion.div
@@ -234,40 +214,31 @@ export default function Journey() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => navigate("/check-in#feedback")}>
+            <Button variant="outline" onClick={() => navigate("/check-in")}>
               Check-In
             </Button>
-            <Button variant="outline" onClick={() => navigate("/customer-feedback")}>
+            <Button variant="outline" onClick={() => navigate(id ? `/customer-feedback?customerId=${id}` : "/customer-feedback")}>
               Customer Feedback
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/inventory")}>
-              Inventory
             </Button>
           </div>
         </div>
 
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div className="space-y-2">
-                <Label htmlFor="role">Edit as</Label>
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as "salesperson" | "manager" | "owner")}
-                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-64"
-                >
-                  <option value="salesperson">Salesperson</option>
-                  <option value="manager">Manager</option>
-                  <option value="owner">Owner</option>
-                </select>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Signed in as</p>
+                <p className="text-lg font-semibold">{user?.name || "User"}</p>
               </div>
-              <div className="text-sm text-muted-foreground">
-                {isSalesperson
-                  ? "Salesperson access is limited to deal conversion status."
-                  : "Manager and owner can update all customer fields."}
-              </div>
+              <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                {user?.roleLabel || role}
+              </span>
             </div>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {isSalesperson
+                ? "Salesperson access is limited to conversion status and reason capture."
+                : "Manager and owner can update the full customer record."}
+            </p>
           </CardContent>
         </Card>
 
@@ -313,22 +284,6 @@ export default function Journey() {
                 <p className="font-semibold">{customer.featurePriorities?.length ? customer.featurePriorities.join(", ") : "Not provided"}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Vehicle Reaction</p>
-                <p className="font-semibold">{customer.vehicleReaction || "Not provided"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Comfort Reaction</p>
-                <p className="font-semibold">{customer.comfortReaction || "Not provided"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Price Reaction</p>
-                <p className="font-semibold">{customer.priceReaction || "Not provided"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Follow-up Intent</p>
-                <p className="font-semibold">{customer.followUpIntent || "Not provided"}</p>
-              </div>
-              <div>
                 <p className="text-sm text-muted-foreground">Budget</p>
                 <p className="font-semibold">₹{customer.budget.toLocaleString("en-IN")}</p>
               </div>
@@ -372,65 +327,35 @@ export default function Journey() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Customer Feedback</CardTitle>
+            <CardTitle>Phase Feedback</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-border bg-muted/50 p-4">
-                <p className="text-sm text-muted-foreground">Vehicle reaction</p>
-                <p className="font-semibold">{customer.vehicleReaction || "Not provided"}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/50 p-4">
-                <p className="text-sm text-muted-foreground">Comfort reaction</p>
-                <p className="font-semibold">{customer.comfortReaction || "Not provided"}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/50 p-4">
-                <p className="text-sm text-muted-foreground">Price reaction</p>
-                <p className="font-semibold">{customer.priceReaction || "Not provided"}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/50 p-4">
-                <p className="text-sm text-muted-foreground">Follow-up intent</p>
-                <p className="font-semibold">{customer.followUpIntent || "Not provided"}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/50 p-4 md:col-span-2">
-                <p className="text-sm text-muted-foreground">Sales review</p>
-                <p className="text-sm">{customer.salesReview || "No sales review recorded."}</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {customer.stageFeedbacks?.length ? (
-                customer.stageFeedbacks.map((feedback) => (
+            {customer.stageFeedbacks?.length ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {customer.stageFeedbacks.map((feedback) => (
                   <div key={feedback.stage} className="rounded-xl border border-border bg-muted/50 p-4">
-                    <p className="font-semibold">{feedback.stage}</p>
-                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                      <p className="text-sm"><span className="text-muted-foreground">Customer:</span> {feedback.customerFeedback || "N/A"}</p>
-                      <p className="text-sm"><span className="text-muted-foreground">Salesperson:</span> {feedback.salespersonResponse || "N/A"}</p>
-                      <p className="text-sm"><span className="text-muted-foreground">Next step:</span> {feedback.nextStep || "N/A"}</p>
-                      <p className="text-sm"><span className="text-muted-foreground">Notes:</span> {feedback.notes || "N/A"}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold">{feedback.stage}</p>
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                        Phase captured
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <p><span className="font-medium">Customer feedback:</span> {feedback.customerFeedback || "Not added yet"}</p>
+                      <p><span className="font-medium">Sales response:</span> {feedback.salespersonResponse || "Not added yet"}</p>
+                      <p><span className="font-medium">Next step:</span> {feedback.nextStep || "Not added yet"}</p>
+                      <p><span className="font-medium">Notes:</span> {feedback.notes || "No notes"}</p>
                     </div>
                   </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">No structured customer feedback has been captured yet.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Inventory Push</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-xl border border-border bg-muted/50 p-4">
-              <p className="text-sm text-muted-foreground">Vehicles to push</p>
-              <p className="font-semibold">{inventoryPush.length ? inventoryPush.join(", ") : "None selected"}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-muted/50 p-4">
-              <p className="text-sm text-muted-foreground">Inventory notes</p>
-              <p className="text-sm">{customer.inventoryNotes || "No inventory notes recorded."}</p>
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border bg-muted/50 p-4">
+                <p className="text-sm text-muted-foreground">
+                  No phase feedback recorded yet. Open Customer Feedback to capture test drive, finance, and follow-up details.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -547,8 +472,6 @@ export default function Journey() {
                   <p className="text-sm font-medium">{customer.aiAnalysis.customerSentiment || "Neutral"}</p>
                   <p className="text-sm text-muted-foreground">Sales Coaching Tip</p>
                   <p className="text-sm font-medium">{customer.aiAnalysis.coachingTip}</p>
-                  <p className="text-sm text-muted-foreground">Sales Review</p>
-                  <p className="text-sm font-medium">{customer.salesReview || "Not provided"}</p>
                 </div>
               </div>
             </CardContent>
@@ -643,16 +566,6 @@ export default function Journey() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="salesReview">Sales Review</Label>
-                  <textarea
-                    id="salesReview"
-                    value={editForm.salesReview}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, salesReview: e.target.value }))}
-                    rows={3}
-                    className="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>
                   <textarea
                     id="notes"
@@ -694,14 +607,6 @@ export default function Journey() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="priceReactionEdit">Price Reaction</Label>
-                    <Input
-                      id="priceReactionEdit"
-                      value={editForm.priceReaction}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, priceReaction: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="timelineEdit">Timeline</Label>
                     <Input
                       id="timelineEdit"
@@ -716,32 +621,6 @@ export default function Journey() {
                       type="number"
                       value={editForm.budget}
                       onChange={(e) => setEditForm((prev) => ({ ...prev, budget: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="vehicleReactionEdit">Vehicle Reaction</Label>
-                    <Input
-                      id="vehicleReactionEdit"
-                      value={editForm.vehicleReaction}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, vehicleReaction: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="comfortReactionEdit">Comfort Reaction</Label>
-                    <Input
-                      id="comfortReactionEdit"
-                      value={editForm.comfortReaction}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, comfortReaction: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="followUpIntentEdit">Follow-up Intent</Label>
-                    <Input
-                      id="followUpIntentEdit"
-                      value={editForm.followUpIntent}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, followUpIntent: e.target.value }))}
                     />
                   </div>
                 </div>

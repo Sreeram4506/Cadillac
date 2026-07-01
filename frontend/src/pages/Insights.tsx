@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Send, Sparkles, User, Bot, Lightbulb } from "lucide-react";
-import { DashboardData, AIChatResponse } from "@/types";
+import { AIChatResponse, Customer, DashboardData, Vehicle } from "@/types";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
 
@@ -54,6 +54,22 @@ export default function Insights() {
     },
   });
 
+  const { data: customers } = useQuery<Customer[]>({
+    queryKey: ["customers"],
+    queryFn: async () => {
+      const response = await fetch(apiUrl("/api/customers"));
+      return response.json();
+    },
+  });
+
+  const { data: vehicles } = useQuery<Vehicle[]>({
+    queryKey: ["vehicles"],
+    queryFn: async () => {
+      const response = await fetch(apiUrl("/api/vehicles"));
+      return response.json();
+    },
+  });
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -72,6 +88,8 @@ export default function Insights() {
             dashboard,
             lostSales,
             salespersonPerformance,
+            customers,
+            vehicles,
           },
         }),
       });

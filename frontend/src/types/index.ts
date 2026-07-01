@@ -178,3 +178,64 @@ export interface AIChatResponse {
   answer: string;
   source: 'openai' | 'fallback';
 }
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "owner" | "manager" | "salesperson";
+  roleLabel?: string;
+}
+
+export interface AuthSession {
+  token: string;
+  user: AuthUser;
+}
+
+export interface OwnerAnalyticsCustomerRisk {
+  id: number;
+  name: string;
+  vehicle: string;
+  status: string;
+  reason: string;
+  salesperson: string;
+  probability: number | null;
+  nextAction: string;
+  ownerInsight: string;
+}
+
+export interface OwnerAnalyticsResponse {
+  metrics: {
+    totalCustomers: number;
+    activeCustomers: number;
+    convertedCustomers: number;
+    lostCustomers: number;
+    stageFeedbackCompletion: number;
+  };
+  topPerformers: Salesperson[];
+  bottomPerformers: Salesperson[];
+  reasonBreakdown: LostSaleReason[];
+  customerRiskList: OwnerAnalyticsCustomerRisk[];
+  topReason: string;
+  highestRiskCustomer: {
+    id: number;
+    name: string;
+    vehicle: string;
+    reason: string;
+    salesperson: string;
+    ownerInsight: string;
+  } | null;
+  aiBrief: {
+    dashboardNote: string;
+    performanceNote: string;
+    lossNote: string;
+    customerNote: string;
+  };
+  ownerSummary?: {
+    dashboardNote: string;
+    performanceNote: string;
+    lossNote: string;
+    customerNote: string;
+    executiveSummary?: string;
+  };
+}

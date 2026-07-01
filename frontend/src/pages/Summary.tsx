@@ -22,40 +22,50 @@ export default function Summary() {
     },
   });
 
-  const generateSummary = (customer: Customer) => {
-    const probability = customer.status === "Converted" ? 100 : 
-                       customer.status === "Lost" ? 0 :
-                       customer.journey.filter(j => j.status === "done").length * 15;
-    
-    const sentiment = customer.status === "Converted" ? "Positive" :
-                     customer.status === "Lost" ? "Negative" :
-                     probability > 50 ? "Positive" : "Neutral";
-    
-    const mainConcern = customer.financeRequired ? "Finance options" :
-                        customer.tradeIn ? "Trade-in value" :
-                        "Vehicle pricing";
-
-    return {
-      narrative: `${customer.name} is interested in ${customer.preferredVehicle} with a budget of ₹${customer.budget.toLocaleString("en-IN")}. They ${customer.financeRequired ? "require" : "do not require"} financing and ${customer.tradeIn ? "have" : "do not have"} a trade-in vehicle. Currently at "${customer.status}" stage.`,
-      probability,
-      sentiment,
-      mainConcern,
-      nextAction: customer.status === "Converted" ? "Complete documentation and delivery" :
-                  customer.status === "Lost" ? "Analyze loss reason and follow up" :
-                  "Schedule test drive and discuss finance options",
-      dueWindow: customer.status === "Converted" ? "Within 3 days" :
-                  customer.status === "Lost" ? "Within 1 week" :
-                  "Within 48 hours"
-    };
-  };
-
-  const filteredCustomers = customers?.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.phone.includes(searchQuery)
-  ) || [];
+  const filteredCustomers =
+    customers?.filter((customer) =>
+      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.phone.includes(searchQuery) ||
+      customer.preferredVehicle.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || [];
 
   if (selectedCustomer) {
-    const summary = generateSummary(selectedCustomer);
+    const ai = selectedCustomer.aiAnalysis;
+    const narrative =
+      ai?.intentSummary ||
+      `${selectedCustomer.name} is interested in ${selectedCustomer.preferredVehicle} with a budget of ₹${selectedCustomer.budget.toLocaleString("en-IN")}.`;
+    const probability =
+      ai?.buyingProbability ??
+      (selectedCustomer.status === "Converted"
+        ? 100
+        : selectedCustomer.status === "Lost"
+          ? 0
+          : selectedCustomer.journey.filter((j) => j.status === "done").length * 15);
+    const sentiment =
+      ai?.customerSentiment
+        ? ai.customerSentiment.charAt(0).toUpperCase() + ai.customerSentiment.slice(1)
+        : selectedCustomer.status === "Converted"
+          ? "Positive"
+          : selectedCustomer.status === "Lost"
+            ? "Negative"
+            : probability > 50
+              ? "Positive"
+              : "Neutral";
+    const mainConcern =
+      ai?.likelyObjections?.[0] ||
+      (selectedCustomer.financeRequired
+        ? "Finance options"
+        : selectedCustomer.tradeIn
+          ? "Trade-in value"
+          : "Vehicle pricing");
+    const nextAction =
+      ai?.recommendedNextAction ||
+      (selectedCustomer.status === "Converted"
+        ? "Complete documentation and delivery"
+        : selectedCustomer.status === "Lost"
+          ? "Analyze loss reason and follow up"
+          : "Schedule test drive and discuss finance options");
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -68,7 +78,7 @@ export default function Summary() {
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Conversation Summary</h1>
+            <h1 className="text-3xl font-bold">Customer Summary</h1>
             <p className="text-muted-foreground">{selectedCustomer.name}</p>
           </div>
         </div>
@@ -78,11 +88,15 @@ export default function Summary() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5 text-primary" />
-                Narrative Summary
+                AI Summary
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed">{summary.narrative}</p>
+            <CardContent className="space-y-3">
+              <p className="text-sm leading-relaxed">{narrative}</p>
+              <div className="rounded-xl border border-border bg-muted/50 p-4">
+                <p className="text-xs text-muted-foreground">Owner insight</p>
+                <p className="text-sm font-medium">{ai?.ownerInsight || "No AI analysis available yet."}</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -94,27 +108,33 @@ export default function Summary() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Buying Probability</span>
                 <span className={`text-2xl font-bold ${
-                  summary.probability > 70 ? "text-green-500" :
-                  summary.probability > 40 ? "text-yellow-500" :
+                  probability > 70 ? "text-green-500" :
+                  probability > 40 ? "text-yellow-500" :
                   "text-red-500"
                 }`}>
-                  {summary.probability}%
+                  {probability}%
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Sentiment</span>
                 <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                  summary.sentiment === "Positive" ? "bg-green-100 text-green-800" :
-                  summary.sentiment === "Negative" ? "bg-red-100 text-red-800" :
+                  sentiment === "Positive" ? "bg-green-100 text-green-800" :
+                  sentiment === "Negative" ? "bg-red-100 text-red-800" :
                   "bg-gray-100 text-gray-800"
                 }`}>
-                  {summary.sentiment}
+                  {sentiment}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Main Concern</span>
-                <span className="font-semibold">{summary.mainConcern}</span>
+                <span className="font-semibold">{mainConcern}</span>
               </div>
+              {ai?.topPriorities?.length ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Top Priorities</span>
+                  <span className="font-semibold">{ai.topPriorities.join(", ")}</span>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>
@@ -123,15 +143,17 @@ export default function Summary() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-primary" />
-              Recommended Action
+              Recommended Next Action
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-start gap-4 rounded-xl border border-primary/50 bg-primary/5 p-4">
               <Clock className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-semibold">{summary.nextAction}</h4>
-                <p className="text-sm text-muted-foreground">Due: {summary.dueWindow}</p>
+                <h4 className="font-semibold">{nextAction}</h4>
+                <p className="text-sm text-muted-foreground">
+                  Due: {ai?.urgency === "high" ? "Today" : ai?.urgency === "medium" ? "Within 48 hours" : "Within a week"}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -148,8 +170,8 @@ export default function Summary() {
       className="space-y-6 p-6"
     >
       <div>
-        <h1 className="text-3xl font-bold">Conversation Summaries</h1>
-        <p className="text-muted-foreground">AI-generated summaries for each customer</p>
+        <h1 className="text-3xl font-bold">Customer Summary</h1>
+        <p className="text-muted-foreground">Choose a customer to see the AI summary and next step.</p>
       </div>
 
       <Card>
@@ -157,7 +179,7 @@ export default function Summary() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search by name or phone..."
+              placeholder="Search by name, phone, or vehicle..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -186,7 +208,7 @@ export default function Summary() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
-                        {customer.name.split(" ").map(n => n[0]).join("")}
+                        {customer.name.split(" ").map((n) => n[0]).join("")}
                       </div>
                       <div>
                         <h3 className="font-semibold">{customer.name}</h3>

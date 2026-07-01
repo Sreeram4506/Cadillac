@@ -3,6 +3,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
 
@@ -12,6 +13,7 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const MONGODB_DB_NAME = process.env.MONGODB_DB || 'dealership_ai';
 const APP_STATE_ID = 'app-state';
+const AUTH_SECRET = process.env.AUTH_SECRET || process.env.JWT_SECRET || 'dealership-auth-secret';
 let mongoClient = null;
 let stateCollection = null;
 let appStateCache = null;
@@ -19,6 +21,21 @@ let appStateCache = null;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+app.use('/api', (req, res, next) => {
+  if (req.path === '/auth/login') {
+    next();
+    return;
+  }
+
+  const user = getAuthUserFromRequest(req);
+  if (!user) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+
+  req.user = user;
+  next();
+});
 
 // Simulate API latency
 const simulateLatency = (min = 400, max = 800) => {
@@ -109,6 +126,120 @@ const salespersonProfiles = {
 
 const normalizeText = (value) => String(value || '').toLowerCase();
 const normalizeRole = (value) => normalizeText(value);
+
+const roleLabels = {
+  owner: 'Owner',
+  manager: 'Manager',
+  salesperson: 'Salesperson',
+};
+
+const toSlug = (value) =>
+  normalizeText(value)
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '');
+
+const getDefaultAuthUsers = (data) => {
+  const salespersonUsers = Array.isArray(data?.salespeople)
+    ? data.salespeople.map((salesperson) => ({
+        id: `salesperson-${salesperson.id}`,
+        name: salesperson.name,
+        email: `${toSlug(salesperson.name) || `salesperson-${salesperson.id}`}@demo.local`,
+        password: 'sales123',
+        role: 'salesperson',
+      }))
+    : [];
+
+  return [
+    {
+      id: 'owner-demo',
+      name: 'Owner',
+      email: 'owner@demo.local',
+      password: 'owner123',
+      role: 'owner',
+    },
+    {
+      id: 'manager-demo',
+      name: 'Manager',
+      email: 'manager@demo.local',
+      password: 'manager123',
+      role: 'manager',
+    },
+    {
+      id: 'salesperson-demo',
+      name: 'Salesperson',
+      email: 'salesperson@demo.local',
+      password: 'sales123',
+      role: 'salesperson',
+    },
+    ...salespersonUsers,
+  ];
+};
+
+const createAuthToken = (user) => {
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      iat: Date.now(),
+    })
+  ).toString('base64url');
+  const signature = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+};
+
+const verifyAuthToken = (token) => {
+  const [payload, signature] = String(token || '').split('.');
+  if (!payload || !signature) return null;
+
+  const expected = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
+  if (signature.length !== expected.length) {
+    return null;
+  }
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch (error) {
+    return null;
+  }
+};
+
+const getAuthUserFromRequest = (req) => {
+  const header = req.headers.authorization || '';
+  const bearer = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token = bearer || req.headers['x-auth-token'];
+  const payload = verifyAuthToken(token);
+  if (!payload) return null;
+  return {
+    id: payload.sub,
+    name: payload.name,
+    email: payload.email,
+    role: payload.role,
+  };
+};
+
+const requireAuth = (req, res, next) => {
+  const user = getAuthUserFromRequest(req);
+  if (!user) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+  req.user = user;
+  next();
+};
+
+const requireRoles = (roles) => (req, res, next) => {
+  const normalized = normalizeRole(req.user?.role);
+  if (!roles.includes(normalized)) {
+    res.status(403).json({ error: 'You do not have access to this resource.' });
+    return;
+  }
+  next();
+};
 
 const stageFeedbackStages = ['Assigned to Salesperson', 'Vehicle Viewed', 'Test Drive', 'Finance Discussion', 'Quotation Given', 'Converted'];
 
@@ -213,6 +344,115 @@ const buildCustomerIntelligencePrompt = (customer) => {
   };
 
   return JSON.stringify(evidence, null, 2);
+};
+
+const buildCopilotContextSummary = (context) => {
+  const dashboard = context?.dashboard || {};
+  const lostSales = context?.lostSales?.byReason || context?.lostSaleAnalysis?.byReason || [];
+  const salespersonPerformance = context?.salespersonPerformance || [];
+  const vehicles = context?.vehicles || [];
+  const customers = context?.customers || [];
+
+  return {
+    kpis: dashboard.kpis || null,
+    vehicleDemand: Array.isArray(dashboard.vehicleDemand) ? dashboard.vehicleDemand.slice(0, 5) : [],
+    activityFeed: Array.isArray(dashboard.activityFeed) ? dashboard.activityFeed.slice(0, 5) : [],
+    topLostReasons: lostSales.slice(0, 5),
+    topSalespeople: salespersonPerformance.slice(0, 5),
+    bottomSalespeople: salespersonPerformance.slice(-3),
+    vehicles: vehicles.slice(0, 8),
+    activeCustomers: customers
+      .filter((customer) => !["Converted", "Lost"].includes(customer.status))
+      .slice(0, 8)
+      .map((customer) => ({
+        name: customer.name,
+        vehicle: customer.preferredVehicle,
+        status: customer.status,
+        budget: customer.budget,
+        financeRequired: customer.financeRequired,
+        tradeIn: customer.tradeIn,
+        aiAnalysis: customer.aiAnalysis,
+      })),
+  };
+};
+
+const buildOwnerAnalyticsSummary = (data) => {
+  const customers = data?.customers || [];
+  const salespersonPerformance = data?.salespersonPerformance || [];
+  const lostSales = data?.lostSaleAnalysis || data?.lostSales || { byReason: [], trend: [], records: [] };
+  const converted = customers.filter((customer) => customer.status === 'Converted').length;
+  const lost = customers.filter((customer) => customer.status === 'Lost').length;
+  const active = customers.length - converted - lost;
+  const stageCompletion = customers.reduce(
+    (acc, customer) => {
+      const completed = (customer.stageFeedbacks || []).filter(
+        (item) => item.customerFeedback || item.salespersonResponse || item.nextStep || item.notes
+      ).length;
+      acc.total += completed;
+      acc.maximum += 6;
+      return acc;
+    },
+    { total: 0, maximum: 0 }
+  );
+
+  const customerRiskList = customers
+    .filter((customer) => customer.status === 'Lost' || customer.lostReason || (customer.aiAnalysis?.buyingProbability || 0) < 55)
+    .slice(0, 12)
+    .map((customer) => ({
+      id: customer.id,
+      name: customer.name,
+      vehicle: customer.preferredVehicle,
+      status: customer.status,
+      reason: customer.lostReason || customer.aiAnalysis?.likelyObjections?.[0] || 'Under review',
+      salesperson: customer.assignedSalesperson?.name || 'Unassigned',
+      probability: customer.aiAnalysis?.buyingProbability ?? null,
+      nextAction: customer.aiAnalysis?.recommendedNextAction || 'Follow up directly',
+      ownerInsight: customer.aiAnalysis?.ownerInsight || 'AI analysis not available yet.',
+    }));
+
+  const topPerformers = salespersonPerformance.slice(0, 5);
+  const bottomPerformers = salespersonPerformance.slice(-5);
+  const reasonBreakdown = lostSales.byReason || [];
+  const topReason = reasonBreakdown[0]?.reason || 'No dominant loss reason yet';
+  const highestRiskCustomer = customers.find((customer) => customer.status === 'Lost' || customer.lostReason) || null;
+
+  return {
+    metrics: {
+      totalCustomers: customers.length,
+      activeCustomers: active,
+      convertedCustomers: converted,
+      lostCustomers: lost,
+      stageFeedbackCompletion: stageCompletion.maximum ? Math.round((stageCompletion.total / stageCompletion.maximum) * 100) : 0,
+    },
+    topPerformers,
+    bottomPerformers,
+    reasonBreakdown,
+    customerRiskList,
+    topReason,
+    highestRiskCustomer: highestRiskCustomer
+      ? {
+          id: highestRiskCustomer.id,
+          name: highestRiskCustomer.name,
+          vehicle: highestRiskCustomer.preferredVehicle,
+          reason: highestRiskCustomer.lostReason || highestRiskCustomer.aiAnalysis?.likelyObjections?.[0] || 'Needs review',
+          salesperson: highestRiskCustomer.assignedSalesperson?.name || 'Unassigned',
+          ownerInsight: highestRiskCustomer.aiAnalysis?.ownerInsight || 'No AI note available yet.',
+        }
+      : null,
+    aiBrief: {
+      dashboardNote: `The dealership currently has ${customers.length} customers, ${converted} converted, ${lost} lost, and ${active} active.`,
+      performanceNote:
+        topPerformers[0]
+          ? `${topPerformers[0].name} is leading performance, while ${bottomPerformers[0]?.name || 'the lower half of the team'} needs coaching focus.`
+          : 'Performance data is still loading.',
+      lossNote: reasonBreakdown[0]
+        ? `The biggest customer drop-off reason is ${reasonBreakdown[0].reason}.`
+        : 'No loss reason has emerged yet.',
+      customerNote: highestRiskCustomer
+        ? `${highestRiskCustomer.name} is the most urgent customer to review.`
+        : 'No urgent customer is flagged yet.',
+    },
+  };
 };
 
 const buildFallbackCustomerAnalysis = (customer, assignedSalesperson) => {
@@ -406,7 +646,7 @@ const chooseSalespersonForCustomer = (salespeople, customer) => {
 const mergeCustomerUpdate = (customer, updates, role) => {
   const normalizedRole = normalizeRole(role);
   const canEditEverything = normalizedRole === 'owner' || normalizedRole === 'manager';
-  const canEditLimited = normalizedRole === 'salesman' || normalizedRole === 'salesperson';
+  const canEditLimited = normalizedRole === 'salesperson';
 
   if (canEditEverything) {
     const merged = { ...customer, ...updates };
@@ -432,6 +672,49 @@ const mergeCustomerUpdate = (customer, updates, role) => {
 };
 
 // API Routes
+
+app.post('/api/auth/login', async (req, res) => {
+  await simulateLatency(150, 300);
+  const { email, password } = req.body || {};
+  const data = readData();
+  const authUsers = getDefaultAuthUsers(data);
+  const normalizedEmail = normalizeText(email);
+  const user = authUsers.find((entry) => normalizeText(entry.email) === normalizedEmail);
+
+  if (!user || String(user.password) !== String(password || '')) {
+    res.status(401).json({ error: 'Invalid credentials.' });
+    return;
+  }
+
+  const sessionUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    roleLabel: roleLabels[user.role] || user.role,
+  };
+
+  res.json({
+    token: createAuthToken(sessionUser),
+    user: sessionUser,
+  });
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  await simulateLatency(100, 200);
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+
+  res.json({
+    user: {
+      ...user,
+      roleLabel: roleLabels[user.role] || user.role,
+    },
+  });
+});
 
 // Get all dashboard data
 app.get('/api/dashboard', async (req, res) => {
@@ -573,8 +856,9 @@ app.put('/api/customers/:id', async (req, res) => {
   }
 
   try {
-    const updatedCustomer = mergeCustomerUpdate(customer, req.body, req.body.role);
-    if (req.body.role && normalizeRole(req.body.role) !== 'owner' && normalizeRole(req.body.role) !== 'manager') {
+    const role = req.user?.role;
+    const updatedCustomer = mergeCustomerUpdate(customer, req.body, role);
+    if (normalizeRole(role) !== 'owner' && normalizeRole(role) !== 'manager') {
       updatedCustomer.status = req.body.status || customer.status;
       if (updatedCustomer.status === 'Converted') {
         updatedCustomer.lostReason = null;
@@ -614,7 +898,7 @@ app.post('/api/customers/:id/appointments', async (req, res) => {
     return;
   }
 
-  const role = normalizeRole(req.body.role);
+  const role = normalizeRole(req.user?.role);
   if (role !== 'owner' && role !== 'manager') {
     res.status(403).json({ error: 'Only manager or owner can manage appointments.' });
     return;
@@ -664,6 +948,12 @@ app.get('/api/vehicles', async (req, res) => {
 // Add vehicle to inventory
 app.post('/api/vehicles', async (req, res) => {
   await simulateLatency();
+  const role = normalizeRole(req.user?.role);
+  if (role !== 'owner' && role !== 'manager') {
+    res.status(403).json({ error: 'Only manager or owner can manage inventory.' });
+    return;
+  }
+
   const data = readData();
   if (!data) {
     res.status(500).json({ error: 'Failed to read data' });
@@ -741,16 +1031,55 @@ app.get('/api/ai-insights', async (req, res) => {
   }
 });
 
-// AI Chat endpoint (OpenAI with fallback)
-app.post('/api/ai-chat', async (req, res) => {
+app.get('/api/owner-analytics', async (req, res) => {
   await simulateLatency();
-  const { question, context } = req.body;
+  if (normalizeRole(req.user?.role) !== 'owner') {
+    res.status(403).json({ error: 'Owner access required.' });
+    return;
+  }
+
+  const data = readData();
+  if (!data) {
+    res.status(500).json({ error: 'Failed to read data' });
+    return;
+  }
+
+  const snapshot = buildOwnerAnalyticsSummary(data);
+  let ownerSummary = snapshot.aiBrief;
 
   if (hasOpenAI()) {
     try {
       const answer = await callOpenAIText({
-        system: 'You are an AI assistant for a car dealership. Be concise, specific, and action-oriented.',
-        user: `Answer based on this dealership context:\n${JSON.stringify(context, null, 2)}\n\nQuestion: ${question}\n\nProvide specific numbers when possible and end with a practical recommendation.`,
+        system: 'You are an executive dealership analyst. Summarize the numbers into a concise owner brief and end with practical action items.',
+        user: `Create an owner-focused analytics summary from this data:\n${JSON.stringify(snapshot, null, 2)}\n\nReturn a short executive summary with 3 priorities and mention the main customer loss reason.`,
+        temperature: 0.2,
+      });
+      ownerSummary = {
+        ...snapshot.aiBrief,
+        executiveSummary: answer,
+      };
+    } catch (error) {
+      console.error('Owner analytics OpenAI error:', error);
+    }
+  }
+
+  res.json({
+    ...snapshot,
+    ownerSummary,
+  });
+});
+
+// AI Chat endpoint (OpenAI with fallback)
+app.post('/api/ai-chat', async (req, res) => {
+  await simulateLatency();
+  const { question, context } = req.body;
+  const contextSummary = buildCopilotContextSummary(context);
+
+  if (hasOpenAI()) {
+    try {
+      const answer = await callOpenAIText({
+        system: 'You are an AI dealership copilot. Use the provided project data, answer with specific numbers when available, and always end with a practical solution or next step.',
+        user: `Use this dealership project data and answer the question directly. If the question asks for a solution, give a short action plan.\n\nProject data:\n${JSON.stringify(contextSummary, null, 2)}\n\nQuestion: ${question}\n\nRequirements:\n- Be concise but intelligent.\n- Mention the most relevant customer, vehicle, salesperson, or KPI details.\n- If data is incomplete, say what is missing and give the best next step anyway.`,
         temperature: 0.2,
       });
 
@@ -767,23 +1096,39 @@ app.post('/api/ai-chat', async (req, res) => {
   // Fallback to canned responses
   const lowerQuestion = question.toLowerCase();
   let answer = '';
+  const topDemand = contextSummary.vehicleDemand[0];
+  const topLost = contextSummary.topLostReasons[0];
+  const topSalesperson = contextSummary.topSalespeople[0];
+  const weakestSalesperson = contextSummary.bottomSalespeople[contextSummary.bottomSalespeople.length - 1];
+  const activeCustomer = contextSummary.activeCustomers[0];
   
-  if (lowerQuestion.includes('leaving') || lowerQuestion.includes('lost')) {
-    const lostData = context?.lostSaleAnalysis?.byReason || [];
-    const topReason = lostData[0]?.reason || 'Price';
-    answer = `Based on the data, customers are primarily leaving due to **${topReason}**. This month, ${lostData[0]?.count || 0} customers cited this reason. **Recommendation**: Address this objection proactively in sales conversations and consider offering flexible solutions.`;
-  } else if (lowerQuestion.includes('demand') || lowerQuestion.includes('vehicle')) {
-    const demand = context?.dashboard?.vehicleDemand || [];
-    const topVehicle = demand[0]?.vehicle || 'Mahindra XUV700';
-    answer = `The **${topVehicle}** is currently in highest demand with ${demand[0]?.count || 0} interested customers. **Recommendation**: Ensure adequate stock and prioritize test drives for this model.`;
+  if (lowerQuestion.includes('leaving') || lowerQuestion.includes('lost') || lowerQuestion.includes('objection')) {
+    const reason = topLost?.reason || 'Price';
+    const count = topLost?.count || 0;
+    answer = `Customers are mainly leaving because of ${reason}, which appears ${count} times in the current data. Solution: address this objection earlier in the conversation, show a clearer value comparison, and offer the next best action immediately after the concern comes up.`;
+  } else if (lowerQuestion.includes('demand') || lowerQuestion.includes('vehicle') || lowerQuestion.includes('stock')) {
+    const vehicle = topDemand?.vehicle || contextSummary.vehicles[0]?.name || 'Mahindra XUV700';
+    const count = topDemand?.count || 0;
+    answer = `The strongest demand is for ${vehicle}, with ${count} interested customers. Solution: keep more visibility on this vehicle, prioritize test drives for it, and use it as a lead model when the customer profile matches.`;
   } else if (lowerQuestion.includes('salesperson') || lowerQuestion.includes('coaching')) {
-    const performance = context?.salespersonPerformance || [];
-    const lowestPerformer = performance[performance.length - 1];
-    answer = `${lowestPerformer?.name || 'One salesperson'} could benefit from coaching. Their conversion rate is ${lowestPerformer?.conversionRate || 0}%. **Recommendation**: ${lowestPerformer?.aiCoachingTip || 'Focus on improving follow-up timing and product knowledge.'}`;
-  } else if (lowerQuestion.includes('week') || lowerQuestion.includes('comparison')) {
-    answer = `This week shows a **15% improvement** in visitor-to-conversion ratio compared to last week. Test drive conversions are up by 8%. **Recommendation**: Continue the current weekend promotion strategy.`;
+    const name = weakestSalesperson?.name || topSalesperson?.name || 'the team';
+    const score = weakestSalesperson?.conversionRate || topSalesperson?.conversionRate || 'n/a';
+    answer = `${name} looks like the best coaching candidate right now, with a conversion rate of ${score}. Solution: tighten follow-up timing, use more structured discovery questions, and pair them with a stronger closer for the next few customers.`;
+  } else if (lowerQuestion.includes('week') || lowerQuestion.includes('comparison') || lowerQuestion.includes('trend')) {
+    const visitors = contextSummary.kpis?.todayVisitors?.value ?? 'available';
+    const sales = contextSummary.kpis?.todaySales?.value ?? 'available';
+    answer = `The project data shows ${visitors} visitors and ${sales} sales in the current dashboard snapshot. Solution: keep the current conversion flow, but improve test-drive conversion and follow-up speed to lift results further.`;
+  } else if (lowerQuestion.includes('customer') || lowerQuestion.includes('profile') || lowerQuestion.includes('what should i do') || lowerQuestion.includes('solution')) {
+    if (activeCustomer) {
+      const aiInsight = activeCustomer.aiAnalysis?.ownerInsight || 'The customer needs a clearer next step.';
+      answer = `${activeCustomer.name} is currently interested in ${activeCustomer.vehicle} and has a ${activeCustomer.status} status. ${aiInsight} Solution: follow up with a specific next action, address finance/trade-in concerns if present, and move the customer toward test drive or booking.`;
+    } else {
+      answer = `The project data suggests the best move is to focus on active customers, top vehicle demand, and the biggest lost-sale reason. Solution: prioritize those three areas first, then use salesperson coaching to improve conversion.`;
+    }
   } else {
-    answer = `Based on the current dealership data, I can see that conversion rates are trending positively. The top performing vehicle is the Mahindra XUV700, and Priya Sharma is leading in sales performance. **Recommendation**: Focus on increasing test drive rates, as customers who test drive are 3x more likely to convert.`;
+    const vehicle = topDemand?.vehicle || contextSummary.vehicles[0]?.name || 'the top-demand vehicle';
+    const salesperson = topSalesperson?.name || 'the best-performing salesperson';
+    answer = `From the current dealership data, ${vehicle} is one of the strongest opportunities and ${salesperson} is among the strongest performers. Solution: use the high-demand model as the conversation anchor, route complex customers to the strongest salesperson, and keep pushing test drives because they are the fastest path to conversion.`;
   }
   
   res.json({
