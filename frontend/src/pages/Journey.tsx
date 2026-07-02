@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Timeline } from "@/components/layout/Timeline";
-import { ArrowLeft, Search, User } from "lucide-react";
+import { ArrowLeft, Search, User, AlertCircle, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Appointment, Customer, Salesperson } from "@/types";
 import { formatDateTime } from "@/lib/utils";
@@ -665,6 +665,20 @@ export default function Journey() {
     );
   }
 
+  const isFollowUpDue = (c: Customer) => {
+    if (c.status === "Converted" || c.status === "Lost") return false;
+    if (c.aiAnalysis?.urgency !== "high") return false;
+    
+    const latestInteraction = c.journey?.reduce((latest, event) => {
+      const eventTime = new Date(event.timestamp).getTime();
+      return eventTime > latest ? eventTime : latest;
+    }, new Date(c.checkInDate).getTime());
+    
+    const hoursSinceLastContact = (Date.now() - (latestInteraction || 0)) / (1000 * 60 * 60);
+    // For demo purposes, we trigger follow-up if inactivity > 24 hours (so it shows up with the generated data)
+    return hoursSinceLastContact >= 24; 
+  };
+
   const filteredCustomers =
     customers?.filter(
       (c) =>
@@ -672,6 +686,9 @@ export default function Journey() {
         c.phone.includes(searchQuery) ||
         c.preferredVehicle.toLowerCase().includes(searchQuery.toLowerCase())
     ) || [];
+
+  const followUpCustomers = filteredCustomers.filter(isFollowUpDue);
+  const regularCustomers = filteredCustomers.filter((c) => !isFollowUpDue(c));
 
   return (
     <motion.div
@@ -706,45 +723,99 @@ export default function Journey() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {filteredCustomers.map((customer) => (
-            <motion.div
-              key={customer.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              whileHover={{ scale: 1.01 }}
-              onClick={() => navigate(`/journey/${customer.id}`)}
-              className="cursor-pointer"
-            >
-              <Card className="transition-shadow hover:shadow-md">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
-                        {customer.name.split(" ").map((n) => n[0]).join("")}
+        <div className="space-y-8">
+          {followUpCustomers.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                <h2 className="text-xl font-bold">Action Required: Follow-up</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {followUpCustomers.map((customer) => (
+                  <motion.div
+                    key={`followup-${customer.id}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ scale: 1.01 }}
+                    onClick={() => navigate(`/journey/${customer.id}`)}
+                    className="cursor-pointer"
+                  >
+                    <Card className="border-destructive/50 shadow-sm transition-shadow hover:shadow-md">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-lg font-bold text-destructive">
+                              {customer.name.split(" ").map((n) => n[0]).join("")}
+                            </div>
+                            <div>
+                              <h3 className="font-semibold">{customer.name}</h3>
+                              <p className="text-sm text-muted-foreground">{customer.preferredVehicle}</p>
+                              <div className="mt-1 flex items-center gap-1 text-xs font-medium text-destructive">
+                                <Clock className="h-3 w-3" />
+                                Inactive &gt; 24h
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="inline-flex rounded-full bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive">
+                              High Urgency
+                            </span>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {formatDateTime(customer.checkInDate)}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold">All Journeys</h2>
+            <div className="grid grid-cols-1 gap-4">
+              {regularCustomers.map((customer) => (
+                <motion.div
+                  key={customer.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ scale: 1.01 }}
+                  onClick={() => navigate(`/journey/${customer.id}`)}
+                  className="cursor-pointer"
+                >
+                  <Card className="transition-shadow hover:shadow-md">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+                            {customer.name.split(" ").map((n) => n[0]).join("")}
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{customer.name}</h3>
+                            <p className="text-sm text-muted-foreground">{customer.preferredVehicle}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            customer.status === "Converted" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                            customer.status === "Lost" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                            "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          }`}>
+                            {customer.status}
+                          </span>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDateTime(customer.checkInDate)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-semibold">{customer.name}</h3>
-                        <p className="text-sm text-muted-foreground">{customer.preferredVehicle}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                        customer.status === "Converted" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                        customer.status === "Lost" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-                        "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                      }`}>
-                        {customer.status}
-                      </span>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDateTime(customer.checkInDate)}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </motion.div>
