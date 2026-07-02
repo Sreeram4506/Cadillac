@@ -1,31 +1,36 @@
 const fs = require('fs');
 const path = require('path');
 
-// Indian names and phone formats
-const firstNames = ['Arjun', 'Rahul', 'Priya', 'Anita', 'Vikram', 'Suresh', 'Deepa', 'Meera', 'Rajesh', 'Kavita', 'Amit', 'Neha', 'Vijay', 'Pooja', 'Sanjay', 'Sunita', 'Alok', 'Rekha', 'Manish', 'Sneha', 'Ravi', 'Lata', 'Sunil', 'Savita', 'Dinesh', 'Geeta', 'Mukesh', 'Kiran', 'Harish', 'Anjali', 'Pradeep', 'Shweta', 'Ashok', 'Madhuri', 'Ramesh', 'Sarita', 'Kumar', 'Shilpa', 'Vinod', 'Kumari'];
-const lastNames = ['Sharma', 'Patel', 'Singh', 'Kumar', 'Verma', 'Gupta', 'Malhotra', 'Reddy', 'Nair', 'Iyer', 'Menon', 'Pillai', 'Rao', 'Chopra', 'Kapoor', 'Saxena', 'Bhatia', 'Chauhan', 'Yadav', 'Joshi', 'Desai', 'Mehta', 'Shah', 'Parekh', 'Trivedi', 'Pandey', 'Tiwari', 'Dubey', 'Mishra', 'Srivastava'];
+// US names and phone formats
+const firstNames = [
+  'James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles',
+  'Christopher', 'Daniel', 'Matthew', 'Anthony', 'Donald', 'Mark', 'Paul', 'Steven', 'Andrew', 'Joshua',
+  'Kenneth', 'Kevin', 'Brian', 'George', 'Edward', 'Ronald', 'Timothy', 'Jason', 'Jeffrey', 'Ryan'
+];
+const lastNames = [
+  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
+  'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
+  'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson'
+];
 
-// Vehicle models (Indian market)
+// Vehicle models (Cadillac-only so inventoryPush can be Cadillac-only)
 const vehicleModels = [
-  { id: 1, name: 'Mahindra XUV700', type: 'SUV', priceRange: [1300000, 2400000] },
-  { id: 2, name: 'Hyundai Creta', type: 'SUV', priceRange: [1100000, 2000000] },
-  { id: 3, name: 'Tata Nexon', type: 'SUV', priceRange: [800000, 1500000] },
-  { id: 4, name: 'Maruti Suzuki Brezza', type: 'SUV', priceRange: [1000000, 1400000] },
-  { id: 5, name: 'Kia Seltos', type: 'SUV', priceRange: [1100000, 2000000] },
-  { id: 6, name: 'Honda City', type: 'Sedan', priceRange: [1200000, 1700000] },
-  { id: 7, name: 'Maruti Suzuki Swift', type: 'Hatchback', priceRange: [650000, 1000000] },
-  { id: 8, name: 'Hyundai i20', type: 'Hatchback', priceRange: [750000, 1300000] },
-  { id: 9, name: 'Tata Punch', type: 'SUV', priceRange: [600000, 900000] },
-  { id: 10, name: 'Toyota Innova Crysta', type: 'MPV', priceRange: [2000000, 2600000] }
+  { id: 1, name: 'Cadillac Escalade', type: 'SUV', priceRange: [55000, 100000] },
+  { id: 2, name: 'Cadillac XT5', type: 'SUV', priceRange: [38000, 68000] },
+  { id: 3, name: 'Cadillac XT6', type: 'SUV', priceRange: [42000, 72000] },
+  { id: 4, name: 'Cadillac Lyriq', type: 'EV', priceRange: [52000, 80000] },
+  { id: 5, name: 'Cadillac Escalade ESV', type: 'SUV', priceRange: [62000, 110000] },
+  { id: 6, name: 'Cadillac CT5', type: 'Sedan', priceRange: [35000, 60000] },
+  { id: 7, name: 'Cadillac CT4', type: 'Sedan', priceRange: [30000, 52000] }
 ];
 
 // Salespeople
 const salespeople = [
-  { id: 1, name: 'Rajesh Kumar', avatar: 'RK', rating: 4.5, aiScore: 85, specialties: ['finance', 'business', 'negotiation'] },
-  { id: 2, name: 'Priya Sharma', avatar: 'PS', rating: 4.8, aiScore: 92, specialties: ['premium', 'family', 'comfort'] },
-  { id: 3, name: 'Vikram Singh', avatar: 'VS', rating: 4.2, aiScore: 78, specialties: ['budget', 'first-time', 'value'] },
-  { id: 4, name: 'Anita Patel', avatar: 'AP', rating: 4.6, aiScore: 88, specialties: ['trade-in', 'finance', 'follow-up'] },
-  { id: 5, name: 'Suresh Reddy', avatar: 'SR', rating: 4.3, aiScore: 82, specialties: ['suv', 'mpv', 'delivery'] }
+  { id: 1, name: 'John Smith', avatar: 'JS', rating: 4.5, aiScore: 85, specialties: ['finance', 'business', 'negotiation'] },
+  { id: 2, name: 'Emily Davis', avatar: 'ED', rating: 4.8, aiScore: 92, specialties: ['premium', 'family', 'comfort'] },
+  { id: 3, name: 'Michael Johnson', avatar: 'MJ', rating: 4.2, aiScore: 78, specialties: ['budget', 'first-time', 'value'] },
+  { id: 4, name: 'Sarah Wilson', avatar: 'SW', rating: 4.6, aiScore: 88, specialties: ['trade-in', 'finance', 'follow-up'] },
+  { id: 5, name: 'David Brown', avatar: 'DB', rating: 4.3, aiScore: 82, specialties: ['suv', 'mpv', 'delivery'] }
 ];
 
 // Lost sale reasons
@@ -38,8 +43,13 @@ const journeyStages = ['Checked In', 'Assigned to Salesperson', 'Vehicle Viewed'
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const randomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const randomBool = () => Math.random() > 0.5;
-const formatCurrency = (amount) => `₹${amount.toLocaleString('en-IN')}`;
-const generatePhone = () => `+91 ${randomInt(700, 999)}${randomInt(100, 999)}${randomInt(10000, 99999)}`;
+const formatCurrency = (amount) => `$${amount.toLocaleString('en-US')}`;
+const generatePhone = () => {
+  const area = randomInt(200, 999);
+  const exchange = randomInt(200, 999);
+  const line = randomInt(0, 9999);
+  return `+1 (${area}) ${exchange}-${String(line).padStart(4, '0')}`;
+};
 const reactionOptions = ['Very positive', 'Positive', 'Neutral', 'Concerned', 'Negative'];
 const comfortOptions = ['Loved the comfort', 'Comfortable enough', 'Wanted more space', 'Wanted a softer ride', 'Not a fit'];
 const priceOptions = ['Comfortable with price', 'Needs EMI support', 'Comparing other options', 'Feels expensive', 'Waiting for a better offer'];
@@ -317,13 +327,13 @@ const generateDashboardKPIs = (customers) => {
 // Generate AI insights
 const generateAIInsights = () => [
   { id: 1, text: "Customers requesting finance convert 42% more than cash buyers", type: "opportunity" },
-  { id: 2, text: "Mahindra XUV700 has highest test drive conversion at 38%", type: "trend" },
+  { id: 2, text: "Cadillac Escalade has highest test drive conversion at 38%", type: "trend" },
   { id: 3, text: "Weekend visitors are 2.3x more likely to purchase within 7 days", type: "insight" },
   { id: 4, text: "Price objections dropped 15% after introducing EMI calculator", type: "improvement" },
-  { id: 5, text: "Priya Sharma's customers show 23% higher satisfaction scores", type: "performance" },
+  { id: 5, text: "Emily Davis's customers show 23% higher satisfaction scores", type: "performance" },
   { id: 6, text: "Customers who test drive convert 3x more than those who don't", type: "opportunity" },
   { id: 7, text: "Finance approval delays causing 12% of lost sales this month", type: "risk" },
-  { id: 8, text: "Hyundai Creta demand peaks on Tuesdays - consider scheduling more demos", type: "trend" }
+  { id: 8, text: "Cadillac XT5 demand peaks on Tuesdays - consider scheduling more demos", type: "trend" }
 ];
 
 // Generate lost sale analysis data

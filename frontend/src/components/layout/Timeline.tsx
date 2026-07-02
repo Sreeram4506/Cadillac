@@ -64,7 +64,7 @@ export function Timeline({ events, className }: TimelineProps) {
                 </h4>
                 {event?.timestamp && (
                   <span className="text-sm text-muted-foreground">
-                    {new Date(event.timestamp).toLocaleDateString("en-IN", {
+                    {new Date(event.timestamp).toLocaleDateString("en-US", {
                       day: "numeric",
                       month: "short",
                       hour: "2-digit",

@@ -111,7 +111,7 @@ export default function Copilot() {
             id: `vehicle-${v.id}`,
             type: "vehicle",
             title: v.name,
-            description: `Best fit for budget ₹${budget.toLocaleString("en-IN")}. Price range: ₹${v.priceRange[0].toLocaleString("en-IN")} - ₹${v.priceRange[1].toLocaleString("en-IN")}.`,
+            description: `Best fit for budget $${budget.toLocaleString("en-US")}. Price range: $${v.priceRange[0].toLocaleString("en-US")} - $${v.priceRange[1].toLocaleString("en-US")}.`,
             icon: Car,
           });
         });

@@ -285,7 +285,7 @@ export default function Journey() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Budget</p>
-                <p className="font-semibold">₹{customer.budget.toLocaleString("en-IN")}</p>
+                <p className="font-semibold">${customer.budget.toLocaleString("en-US")}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Assigned Salesperson</p>

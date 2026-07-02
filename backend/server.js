@@ -608,8 +608,8 @@ const chooseSalespersonForCustomer = (salespeople, customer) => {
 
     if (customer.financeRequired && profile.includes('finance')) score += 25;
     if (customer.tradeIn && profile.includes('trade-in')) score += 20;
-    if (budget > 1800000 && profile.includes('premium')) score += 20;
-    if (budget < 1000000 && profile.includes('budget')) score += 20;
+    if (budget > 75000 && profile.includes('premium')) score += 20;
+    if (budget < 45000 && profile.includes('budget')) score += 20;
     if (normalizeText(customer.buyingPurpose).includes('family') && profile.includes('family')) score += 18;
     if (normalizeText(customer.buyingPurpose).includes('business') && profile.includes('business')) score += 18;
     if (normalizeText(customer.colorPreference) && profile.includes(normalizeText(customer.colorPreference))) score += 15;
@@ -626,8 +626,8 @@ const chooseSalespersonForCustomer = (salespeople, customer) => {
     if (customer.preferredVehicle) {
       const vehicle = normalizeText(customer.preferredVehicle);
       if (profile.includes('suv') && vehicle.includes('suv')) score += 12;
-      if (profile.includes('mpv') && vehicle.includes('innova')) score += 12;
-      if (profile.includes('family') && (intentText.includes('family') || vehicle.includes('creta') || vehicle.includes('xuv'))) score += 8;
+      if (profile.includes('mpv') && vehicle.includes('escalade')) score += 12;
+      if (profile.includes('family') && (intentText.includes('family') || vehicle.includes('xt5') || vehicle.includes('lyriq'))) score += 8;
       if (profile.includes('delivery') && intentText.includes('immediate')) score += 8;
       if (profile.includes('first-time') && intentText.includes('first-time')) score += 12;
       if (profile.includes('mileage') && intentText.includes('mileage')) score += 12;
@@ -1107,7 +1107,7 @@ app.post('/api/ai-chat', async (req, res) => {
     const count = topLost?.count || 0;
     answer = `Customers are mainly leaving because of ${reason}, which appears ${count} times in the current data. Solution: address this objection earlier in the conversation, show a clearer value comparison, and offer the next best action immediately after the concern comes up.`;
   } else if (lowerQuestion.includes('demand') || lowerQuestion.includes('vehicle') || lowerQuestion.includes('stock')) {
-    const vehicle = topDemand?.vehicle || contextSummary.vehicles[0]?.name || 'Mahindra XUV700';
+    const vehicle = topDemand?.vehicle || contextSummary.vehicles[0]?.name || 'Cadillac Escalade';
     const count = topDemand?.count || 0;
     answer = `The strongest demand is for ${vehicle}, with ${count} interested customers. Solution: keep more visibility on this vehicle, prioritize test drives for it, and use it as a lead model when the customer profile matches.`;
   } else if (lowerQuestion.includes('salesperson') || lowerQuestion.includes('coaching')) {

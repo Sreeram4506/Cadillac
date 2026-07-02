@@ -18,9 +18,9 @@ export function KpiCard({ title, value, delta, trend, format = "number", classNa
     
     switch (format) {
       case "currency":
-        return new Intl.NumberFormat("en-IN", {
+        return new Intl.NumberFormat("en-US", {
           style: "currency",
-          currency: "INR",
+          currency: "USD",
           maximumFractionDigits: 0,
         }).format(val);
       case "percentage":

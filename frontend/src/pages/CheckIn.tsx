@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Salesperson, Vehicle } from "@/types";
 import { apiUrl } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 interface FormData {
   name: string;
@@ -38,6 +39,7 @@ const sections = [
 
 export default function CheckIn() {
   const navigate = useNavigate();
+  const { user, isLoading } = useAuth();
   const [currentSection, setCurrentSection] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -63,25 +65,33 @@ export default function CheckIn() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [currentSection]);
 
-  const { data: salespeople } = useQuery<Salesperson[]>({
+  const { data: salespeopleRaw } = useQuery<Salesperson[]>({
     queryKey: ["salespeople"],
+    enabled: Boolean(user) && !isLoading,
     queryFn: async () => {
       const response = await fetch(apiUrl("/api/salespeople"));
+      if (!response.ok) throw new Error(`Failed to load salespeople (${response.status})`);
       return response.json();
     },
   });
 
-  const { data: vehicles } = useQuery<Vehicle[]>({
+  const salespeople: Salesperson[] = Array.isArray(salespeopleRaw) ? salespeopleRaw : [];
+
+  const { data: vehiclesRaw } = useQuery<Vehicle[]>({
     queryKey: ["vehicles"],
+    enabled: Boolean(user) && !isLoading,
     queryFn: async () => {
       const response = await fetch(apiUrl("/api/vehicles"));
+      if (!response.ok) throw new Error(`Failed to load vehicles (${response.status})`);
       return response.json();
     },
   });
 
+  const vehicles: Vehicle[] = Array.isArray(vehiclesRaw) ? vehiclesRaw : [];
+
   const selectedSalesperson =
-    salespeople?.find((sp) => sp.id === Number(formData.assignedSalespersonId)) ||
-    salespeople?.[0] ||
+    salespeople.find((sp) => sp.id === Number(formData.assignedSalespersonId)) ||
+    salespeople[0] ||
     null;
 
   const featureOptions = ["Mileage", "Boot Space", "Safety", "Comfort", "Technology", "Low Maintenance"];
@@ -144,6 +154,22 @@ export default function CheckIn() {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        Please sign in to continue.
+      </div>
+    );
+  }
 
   if (showSuccess) {
     return (
@@ -234,7 +260,7 @@ export default function CheckIn() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number *</Label>
-                    <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+91 XXXXX XXXXX" />
+                    <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+1 (XXX) XXX-XXXX" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -420,7 +446,7 @@ export default function CheckIn() {
                     <p><strong>Buy Reason:</strong> {formData.buyingPurpose || "None"}</p>
                     <p><strong>Color:</strong> {formData.colorPreference || "None"}</p>
                     <p><strong>Top Priorities:</strong> {formData.featurePriorities.length ? formData.featurePriorities.join(", ") : "None"}</p>
-                    <p><strong>Budget:</strong> ₹{parseInt(formData.budget || "0", 10).toLocaleString("en-IN")}</p>
+                    <p><strong>Budget:</strong> ${parseInt(formData.budget || "0", 10).toLocaleString("en-US")}</p>
                     <p><strong>Finance:</strong> {formData.financeRequired ? "Yes" : "No"}</p>
                     <p><strong>Trade-in:</strong> {formData.tradeIn ? "Yes" : "No"}</p>
                     <p><strong>Timeline:</strong> {formData.timeline}</p>

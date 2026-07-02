@@ -33,7 +33,7 @@ export default function Summary() {
     const ai = selectedCustomer.aiAnalysis;
     const narrative =
       ai?.intentSummary ||
-      `${selectedCustomer.name} is interested in ${selectedCustomer.preferredVehicle} with a budget of ₹${selectedCustomer.budget.toLocaleString("en-IN")}.`;
+      `${selectedCustomer.name} is interested in ${selectedCustomer.preferredVehicle} with a budget of $${selectedCustomer.budget.toLocaleString("en-US")}.`;
     const probability =
       ai?.buyingProbability ??
       (selectedCustomer.status === "Converted"

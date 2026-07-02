@@ -40,7 +40,7 @@ export default function Inventory() {
       [vehicle.name, vehicle.type].some((value) => value.toLowerCase().includes(searchQuery.toLowerCase()))
     ) || [];
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.type.trim() || !formData.minPrice.trim() || !formData.maxPrice.trim()) {
